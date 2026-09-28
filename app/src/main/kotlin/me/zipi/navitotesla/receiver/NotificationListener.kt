@@ -26,6 +26,11 @@ class NotificationListener : NotificationListenerService() {
     @VisibleForTesting
     internal var serviceScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    @VisibleForTesting
+    internal var activeNotificationsProvider: () -> Array<StatusBarNotification>? = {
+        activeNotifications
+    }
+
     private val lastTitleById = ConcurrentHashMap<Int, String>()
 
     override fun onCreate() {
@@ -36,6 +41,18 @@ class NotificationListener : NotificationListenerService() {
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
+    }
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        AnalysisUtil.log("notification listener connected")
+        try {
+            activeNotificationsProvider()
+                ?.filter { PoiFinderFactory.isNaviSupport(it.packageName) }
+                ?.forEach { processNotification(it, "active") }
+        } catch (exception: SecurityException) {
+            AnalysisUtil.warn("failed to read active notifications: ${exception.message}")
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
@@ -53,39 +70,46 @@ class NotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
         if (PoiFinderFactory.isNaviSupport(sbn.packageName)) {
-            serviceScope.launch {
-                val extras = sbn.notification.extras
-                val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
-                val text = extras.getString(Notification.EXTRA_TEXT) ?: ""
-                val subText = extras.getString(Notification.EXTRA_SUB_TEXT) ?: ""
-                val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
+            processNotification(sbn, "posted")
+        }
+    }
 
-                if (lastTitleById.put(sbn.id, title) != title) {
-                    AnalysisUtil.log(
-                        "onNotificationPosted ~ packageName: ${sbn.packageName} " +
-                            "id: ${sbn.id} postTime: ${sbn.postTime} title: $title " +
-                            "text: $text subText: $subText bigText: $bigText",
-                    )
-                }
+    private fun processNotification(
+        sbn: StatusBarNotification,
+        source: String,
+    ) {
+        serviceScope.launch {
+            val extras = sbn.notification.extras
+            val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
+            val text = extras.getString(Notification.EXTRA_TEXT) ?: ""
+            val subText = extras.getString(Notification.EXTRA_SUB_TEXT) ?: ""
+            val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
 
-                val bundle = Bundle()
-                bundle.putString(FirebaseAnalytics.Param.SCREEN_NAME, "NotificationListener")
-                bundle.putString(FirebaseAnalytics.Param.SCREEN_CLASS, "NotificationListener")
-                AnalysisUtil.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, bundle)
-                AnalysisUtil.setCustomKey("packageName", sbn.packageName)
-                NaviToTeslaAccessibilityService.closeScanWindow()
-                ShareWorker.startShare(applicationContext, sbn.packageName, title, text)
-                NaviToTeslaAccessibilityService.notifyIfAvailable(
-                    applicationContext,
-                    sbn.packageName,
-                    text,
+            if (lastTitleById.put(sbn.id, title) != title || source == "active") {
+                AnalysisUtil.log(
+                    "notification received ~ source: $source packageName: ${sbn.packageName} " +
+                        "id: ${sbn.id} postTime: ${sbn.postTime} title: $title " +
+                        "text: $text subText: $subText bigText: $bigText",
                 )
-                RemoteConfigUtil.initialize()
-                VersionCheckWorker.startVersionCheck(applicationContext)
-                val param = Bundle()
-                param.putString("package", sbn.packageName)
-                AnalysisUtil.logEvent("notification_received", param)
             }
+
+            val bundle = Bundle()
+            bundle.putString(FirebaseAnalytics.Param.SCREEN_NAME, "NotificationListener")
+            bundle.putString(FirebaseAnalytics.Param.SCREEN_CLASS, "NotificationListener")
+            AnalysisUtil.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, bundle)
+            AnalysisUtil.setCustomKey("packageName", sbn.packageName)
+            NaviToTeslaAccessibilityService.closeScanWindow()
+            ShareWorker.startShare(applicationContext, sbn.packageName, title, text)
+            NaviToTeslaAccessibilityService.notifyIfAvailable(
+                applicationContext,
+                sbn.packageName,
+                text,
+            )
+            RemoteConfigUtil.initialize()
+            VersionCheckWorker.startVersionCheck(applicationContext)
+            val param = Bundle()
+            param.putString("package", sbn.packageName)
+            AnalysisUtil.logEvent("notification_received", param)
         }
     }
 }

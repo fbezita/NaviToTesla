@@ -139,6 +139,47 @@ class NotificationListenerTest {
     }
 
     @Test
+    fun `listener 연결 시 이미 활성화된 TMap 알림도 처리한다`() {
+        val sbn =
+            buildSbn(
+                packageName = "com.skt.tmap.ku",
+                title = "경로주행",
+                text = "내 위치 > 서울역",
+            )
+        listener.activeNotificationsProvider = { arrayOf(sbn) }
+
+        listener.onListenerConnected()
+
+        verify(exactly = 1) {
+            ShareWorker.startShare(
+                any(),
+                eq("com.skt.tmap.ku"),
+                eq("경로주행"),
+                eq("내 위치 > 서울역"),
+            )
+        }
+    }
+
+    @Test
+    fun `listener 연결 시 활성화된 미지원 알림은 처리하지 않는다`() {
+        listener.activeNotificationsProvider = {
+            arrayOf(
+                buildSbn(
+                    packageName = "com.google.android.apps.maps",
+                    title = "Driving",
+                    text = "Continue ahead",
+                ),
+            )
+        }
+
+        listener.onListenerConnected()
+
+        verify(exactly = 0) {
+            ShareWorker.startShare(any(), any(), any(), any())
+        }
+    }
+
+    @Test
     fun `지원하지 않는 패키지의 알림은 ShareWorker 를 호출하지 않는다`() {
         val sbn =
             buildSbn(

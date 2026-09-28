@@ -3,6 +3,7 @@ package me.zipi.navitotesla.util
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
+import me.zipi.navitotesla.BuildConfig
 import me.zipi.navitotesla.R
 
 object RemoteConfigUtil {
@@ -35,14 +36,24 @@ object RemoteConfigUtil {
     fun getString(key: String): String {
         val remoteConfig = FirebaseRemoteConfig.getInstance()
         val value = remoteConfig.getString(key)
-        if (value != DEFAULT_VALUE) return value
-        return try {
-            Tasks.await(remoteConfig.fetchAndActivate())
-            remoteConfig.getString(key)
-        } catch (_: Exception) {
-            value
-        }
+        if (value.isUsableRemoteValue()) return value
+        val fetchedValue =
+            try {
+                Tasks.await(remoteConfig.fetchAndActivate())
+                remoteConfig.getString(key)
+            } catch (_: Exception) {
+                value
+            }
+        return fetchedValue.takeIf { it.isUsableRemoteValue() } ?: localValue(key)
     }
+
+    private fun String.isUsableRemoteValue(): Boolean = isNotBlank() && this != DEFAULT_VALUE
+
+    private fun localValue(key: String): String =
+        when (key) {
+            "tmapApiKey" -> BuildConfig.LOCAL_TMAP_API_KEY
+            else -> ""
+        }
 
     fun getBoolean(key: String): Boolean {
         val remoteConfig = FirebaseRemoteConfig.getInstance()

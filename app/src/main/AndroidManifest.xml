@@ -31,6 +31,19 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".receiver.MapConDestinationActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:permission="ai.rhinos.mapcon.permission.READ_DESTINATION"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="ai.rhinos.mapcon.action.DESTINATION_STARTED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
@@ -82,15 +95,6 @@
             <intent-filter>
                 <action android:name="navitotesla.ENABLE"/>
                 <action android:name="navitotesla.DISABLE"/>
-            </intent-filter>
-        </receiver>
-
-        <receiver
-            android:name=".receiver.MapConDestinationReceiver"
-            android:exported="true"
-            android:permission="ai.rhinos.mapcon.permission.READ_DESTINATION">
-            <intent-filter>
-                <action android:name="ai.rhinos.mapcon.action.DESTINATION_STARTED" />
             </intent-filter>
         </receiver>
 

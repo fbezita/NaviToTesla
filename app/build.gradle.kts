@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.ksp)
@@ -9,6 +11,14 @@ plugins {
 ksp {
     arg { listOf("room.schemaLocation=$projectDir/schemas") }
 }
+
+val localProperties =
+    Properties().apply {
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+    }
+
+fun localSecret(name: String): String = localProperties.getProperty(name, "").replace("\\", "\\\\").replace("\"", "\\\"")
+
 android {
     compileSdk = 37
 
@@ -20,6 +30,7 @@ android {
 
         versionCode = Integer.parseInt(System.getenv("GITHUB_RUN_NUMBER") ?: "1")
         versionName = System.getenv("RELEASE") ?: "1.0"
+        buildConfigField("String", "LOCAL_TMAP_API_KEY", "\"${localSecret("tmapApiKey")}\"")
     }
 
     flavorDimensions += "store"
