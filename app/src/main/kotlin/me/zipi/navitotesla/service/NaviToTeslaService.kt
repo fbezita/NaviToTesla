@@ -47,6 +47,35 @@ class NaviToTeslaService(
         level: AnalysisUtil.ToastLevel = AnalysisUtil.ToastLevel.INFO,
     ) = AnalysisUtil.makeToast(context = context, text = text, level = level)
 
+    /** 이미 좌표까지 확인된 외부 앱의 목적지를 다시 검색하지 않고 전송한다. */
+    suspend fun shareExternalDestination(poi: Poi) {
+        if (!EnablerUtil.isSendingCheck()) {
+            AnalysisUtil.log("skip external destination because condition")
+            return
+        }
+        try {
+            appRepository.clearExpiredPoi()
+            try {
+                share(poi)
+            } catch (_: ForbiddenException) {
+                AnalysisUtil.warn("force expire token and retry external destination...")
+                expireToken()
+                share(poi)
+            }
+        } catch (error: Exception) {
+            AnalysisUtil.error("external destination share error", error)
+            val message =
+                context.getString(R.string.sendDestinationFail) + "\n" +
+                    context.getString(R.string.apiError)
+            makeToast(
+                text = message,
+                level = AnalysisUtil.ToastLevel.ERROR,
+            )
+            AnalysisUtil.recordException(error)
+            AnalysisUtil.sendUnsentReports()
+        }
+    }
+
     /**
      * 안내 종료
      */
